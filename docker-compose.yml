@@ -1,0 +1,76 @@
+version: '3.5' 
+services:
+
+  traefik:
+    image: traefik:1.7
+    command: --web --docker --docker.domain=app.test --logLevel=DEBUG
+    depends_on:
+    # our setup relies on the 3 apps running. Trying to 
+    # spin up traefik will bring up those too
+    - "securfire-app"
+    - "gelo26-app"
+    - "arriscaepetisca-app"
+    ports:
+    # access this with the correct Host header to access 
+    # the respective container
+    - "80:80"
+    # management UI
+    - "8080:8080"
+    volumes:
+    # traefik does its magic by reading information about 
+    # running containers from the docker socket
+    - /var/run/docker.sock:/var/run/docker.sock
+    - /dev/null:/traefik.toml
+    networks:
+      outside-world:
+      internal-network:
+
+  # securfire-app, gelo26-app and arriscaepetisca-app are Caddy instances listening to 
+  # port 80 and serving an index.html.
+  securfire-app:
+    image: httpd
+    volumes: 
+       - ./securfire/html:/usr/local/apache2/htdocs
+    networks:
+      internal-network:
+        # the aliases are not required, but are useful if 
+        # the applications want to internally reference 
+        # each other by host name
+        aliases:
+        - "securfire"
+    labels:
+    - "traefik.port=80"
+    - "traefik.frontend.rule=Host:securfire.duckdns.org"
+
+  arriscaepetisca-app:
+    image: httpd
+    volumes: 
+       - ./arriscaepetisca/html:/usr/local/apache2/htdocs
+    networks:
+      internal-network:
+        aliases:
+        - "arriscaepetisca"
+    labels:
+    - "traefik.port=80"
+    - "traefik.frontend.rule=Host:arriscaepetisca.duckdns.org"
+
+  gelo26-app:
+    image: httpd
+    volumes: 
+      - ./gelo26/html:/usr/local/apache2/htdocs
+    networks:
+      internal-network:
+        aliases:
+        - "gelo26"
+    labels:
+    - "traefik.port=80"
+    - "traefik.frontend.rule=Host:gelo26.duckdns.org" 
+
+networks:
+  # everything that is *only* on "internal network" cannot 
+  # talk to WAN
+  internal-network:
+        internal: true
+  # add this network to a container to make it talk to the 
+  # rest of the world
+  outside-world:
